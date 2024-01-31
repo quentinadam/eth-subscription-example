@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Eth subscription test</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz@6..12&family=Roboto+Mono&display=swap" rel="stylesheet">
+    <script>
+
+const rpcUrl = 'wss://ethereum.publicnode.com';
+
+class DepositListener {
+
+  #webSocketUrl;
+  #contractAddress;
+  #decimals;
+
+  constructor(webSocketUrl, contractAddress, decimals) {
+    this.#webSocketUrl = webSocketUrl;
+    this.#contractAddress = contractAddress;
+    this.#decimals = decimals;
+  }
+
+  start() {
+    const ws = new WebSocket(this.#webSocketUrl);
+    ws.onopen = () => {
+      console.log('websocket open');
+
+      ws.send(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'eth_subscribe',
+          params: ['logs', {
+            address: this.#contractAddress,
+            topics: ['0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'],
+          }],
+        }),
+      );
+
+      ws.onmessage = (event) => {
+        const json = JSON.parse(event.data);
+        if (json.method === 'eth_subscription') {
+          const hash = json.params.result.transactionHash;
+          const source = json.params.result.topics[1].slice(26);
+          const destination = json.params.result.topics[2].slice(26);
+          const amount = (Number(json.params.result.data)/(10**this.#decimals)).toFixed(this.#decimals);
+          console.log({ source, destination, amount, hash });
+          document.getElementById('root').getElementsByTagName('tbody')[0].innerHTML += `
+            <tr>
+              <td style="padding: 0 4px"><a href="https://etherscan.io/tx/${hash}">${hash}<a></td>
+              <td style="padding: 0 4px">${source}</td>
+              <td style="padding: 0 4px">${destination}</td>
+              <td style="padding: 0 4px; text-align: right">${amount}</td>
+            </tr>
+          `;
+        }
+      };
+    };
+
+    ws.onclose = () => {
+      this.start();
+    };
+  }
+}
+
+const contractAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'; // USDC
+
+const listener = new DepositListener(rpcUrl, contractAddress, 6);
+
+listener.start();
+    </script>
+  </head>
+  <body style="font-family: 'Roboto Mono', monospace; font-size: 12px;">
+    <table id="root">
+      <thead>
+        <tr>
+          <th>Hash</th>
+          <th>Source</th>
+          <th>Destination</th>
+          <th>Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+      </tbody>
+    </table>
+  </body>
+</html>
